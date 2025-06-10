@@ -15,6 +15,8 @@ class DiffusionTrainer:
         criterion=SNRGammaMSE(),
         post_criterion=nn.MSELoss(),
         lr=0.001,
+        use_mixup=False,
+        data_prediction=True,
         device=None):
         
         self.device = device if device is not None else torch.device(
@@ -23,7 +25,10 @@ class DiffusionTrainer:
         self.model = model.to(self.device)
         self.optimizer = torch.optim.Adam(
             params=self.model.parameters(), lr=lr)
+        self.data_pred = data_prediction
+        self.use_mixup = use_mixup
         self.lr = lr
+        
         self.scheduler = None 
         self.forward_proc = forward_process
 
@@ -41,20 +46,30 @@ class DiffusionTrainer:
         num_batch = 0
         loss = 0.0
         for x, y_lst in diffusion_loader:
-            y0 = y_lst[0].to(self.device)
-            max_draws = 1
             self.optimizer.zero_grad()
+            
+            y0 = y_lst[0].to(self.device)
             t = torch.randint(1, len(y_lst), (1,),
                               device=self.device).item()
 
             x = x.to(self.device)
             yt = y_lst[t].to(self.device)
+            model_in = yt
             y0 = y_lst[0].to(self.device)
-
-            outs = self.model(x, yt)
-
-            loss += self.criterion(outs, y0, self.forward_proc.SNR[t])
-
+            added_noise = None
+            
+            if self.use_mixup:
+                m = torch.rand_like(yt)
+                model_in = (m * yt) + ((1-m) * y0)
+            
+            outs = self.model(x, model_in)
+            
+            if not self.data_pred:
+                added_noise = yt - self.forward_proc.raw_coeffs[t] * y0
+                loss += self.criterion(outs, added_noise, self.forward_proc.SNR[t])
+            else:
+                loss += self.criterion(outs, y0, self.forward_proc.SNR[t])
+            
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), max_norm=1.0)
 
@@ -96,11 +111,11 @@ class DiffusionTrainer:
             self.scheduler.step()
 
             print(
-                f"[PRE-TRAINING] Epoch {epoch + 1}/{num_epochs} -- Diffusion Loss: {train_loss}")
+                f"[TRAINING] Epoch {epoch + 1}/{num_epochs} -- Diffusion Loss: {train_loss}")
 
             self.pre_train_history.append(train_loss)
 
-        save_dir = "modelsave/encoder_transformer/pre_training/diffusion"
+        save_dir = f"modelsave/diffusion/{self.model.name}"
         os.makedirs(save_dir, exist_ok=True)
         print(f"Diffusion training finished, saving model to {save_dir}")
 
