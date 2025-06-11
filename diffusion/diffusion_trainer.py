@@ -39,7 +39,7 @@ class DiffusionTrainer:
         self.post_train_history = []
         self.post_val_history = []
         
-    def _train_epoch(self):
+    def _train_epoch(self, diffusion_loader):
         current_lr = self.optimizer.param_groups[0]['lr']
         print(f"Current learning rate: {current_lr:.6f}")
 
@@ -79,7 +79,7 @@ class DiffusionTrainer:
         self.optimizer.step()
         return loss / num_batch
     
-    def _eval_epoch(self):
+    def _eval_epoch(self, val_loader):
         self.model.eval()
 
         val_loss = 0.0
@@ -106,8 +106,8 @@ class DiffusionTrainer:
         )
         
         for epoch in range(num_epochs):
-            train_loss = self._pre_train_epoch(diffusion_loader)
-
+            train_loss = self._train_epoch(diffusion_loader)
+            val_loss = self._eval_epoch(val_loader)
             self.scheduler.step()
 
             print(

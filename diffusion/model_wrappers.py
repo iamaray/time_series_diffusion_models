@@ -7,6 +7,24 @@ from torch.utils.data import DataLoader
 
 from typing import Tuple
 
+class BaseConstructor(nn.Module):
+    def __init__(self):
+        super(BaseConstructor, self).__init__()
+        
+    def forward(self, x: torch.Tensor, yt: torch.Tensor, t: int):
+        return yt
+    
+class ConditionalConstructor(nn.Module):
+    def __init__(self, in_seq: int, in_feats: int, out_seq:int):
+        super(BaseConstructor, self).__init__()
+        self.proj = nn.Linear(in_features=in_seq * in_feats, out_features=out_seq)
+        
+    def forward(self, x: torch.Tensor, yt: torch.Tensor, t: int):
+        x = x.view(-1)
+        proj = self.proj(x)
+        
+        return torch.cat([x.unsqueeze(-1), yt.unsqueeze(-1)], dim=0)
+
 class DiffusionModel(nn.Module):
     def __init__(
         self, 
@@ -28,7 +46,13 @@ class DiffusionModel(nn.Module):
     def predict(self, x: torch.Tensor, yt: torch.Tensor, t: int):
         return self.forward(x, yt, t)
 
-    def inference(self, x: torch.Tensor, forward_process, num_inference_steps: int = None):
+    def inference(
+        self, 
+        x: torch.Tensor,
+        forward_process,
+        num_inference_steps: int = None,
+        train_norm = None):
+        
         """
         Full inference loop for time series diffusion model.
 
