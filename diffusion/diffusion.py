@@ -10,8 +10,8 @@ class ForwardProcess:
         self.betas = variance_schedule
         self.T = variance_schedule.shape[0]
         
-        alphas = 1 - self.betas
-        bar_alphas = torch.cumprod(alphas, dim=0)
+        self.alphas = 1 - self.betas
+        bar_alphas = torch.cumprod(self.alphas, dim=0)
         self.SNR = bar_alphas / (1 - bar_alphas)
         
         self.raw_coeffs = torch.sqrt(bar_alphas)
