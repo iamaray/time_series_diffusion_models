@@ -39,13 +39,14 @@ def compute_posterior(forward_process, t):
     mean_post = (coeff_x0 * predicted_x0) + coeff_xt * yt
     noise = torch.randn_like(yt)
     yt = mean_post + torch.sqrt(var_post) * noise
+    return yt
     
 class DiffusionModel(nn.Module):
     def __init__(
         self, 
         model: nn.Module, 
         data_pred: bool, 
-        input_constructor: nn.Module, 
+        input_constructor: nn.Module,
         output_shape: Tuple[int, int]):
         
         super(DiffusionModel, self).__init__()
@@ -81,16 +82,17 @@ class DiffusionModel(nn.Module):
         """
         device = x.device
         batch_size = x.shape[0]
-
         if num_inference_steps is None:
             num_inference_steps = forward_process.T
 
         yt = torch.randn(batch_size, *self.output_shape, device=device)
+        
+        x = train_norm.transform(x)
 
         for t in reversed(range(num_inference_steps)):
             t_tensor = torch.full((batch_size,), t, device=device, dtype=torch.long)
-
             model_out = self.predict(x, yt, t_tensor)
+            std_targets = train_norm.transform(targets.unsqueeze(-1), transform_col=0)
 
             if self.data_pred:
                 predicted_x0 = model_out
@@ -102,11 +104,10 @@ class DiffusionModel(nn.Module):
                 predicted_x0 = (yt - forward_process.noise_coeffs[t] * predicted_noise) / sqrt_bar
 
             if t > 0:
-                compute_posterior(forward_process, t)
+                yt = compute_posterior(forward_process, t)
             else:
                 yt = predicted_x0
 
-        
+            yt = train_norm.reverse(transformed=yt.unsqueeze(-1)).squeeze()
         
             return yt
-        
