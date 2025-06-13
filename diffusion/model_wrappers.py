@@ -25,6 +25,21 @@ class ConditionalConstructor(nn.Module):
         
         return torch.cat([x.unsqueeze(-1), yt.unsqueeze(-1)], dim=0)
 
+def compute_posterior(forward_process, t):
+    beta_t = forward_process.betas[t]
+    alpha_t = forward_process.alphas[t]
+    alpha_bar = sqrt_bar**2
+    alpha_bar_prev = forward_process.raw_coeffs[t - 1]**2
+
+    # posterior q(x_{t-1} | x_t, x0)
+    var_post = beta_t * (1 - alpha_bar_prev) / (1 - alpha_bar)
+    coeff_x0 = torch.sqrt(alpha_bar_prev) * beta_t / (1 - alpha_bar)
+    coeff_xt = torch.sqrt(alpha_t) * (1 - alpha_bar_prev) / (1 - alpha_bar)
+
+    mean_post = (coeff_x0 * predicted_x0) + coeff_xt * yt
+    noise = torch.randn_like(yt)
+    yt = mean_post + torch.sqrt(var_post) * noise
+    
 class DiffusionModel(nn.Module):
     def __init__(
         self, 
@@ -87,20 +102,11 @@ class DiffusionModel(nn.Module):
                 predicted_x0 = (yt - forward_process.noise_coeffs[t] * predicted_noise) / sqrt_bar
 
             if t > 0:
-                beta_t = forward_process.betas[t]
-                alpha_t = forward_process.alphas[t]
-                alpha_bar = sqrt_bar**2
-                alpha_bar_prev = forward_process.raw_coeffs[t - 1]**2
-
-                # posterior q(x_{t-1} | x_t, x0)
-                var_post = beta_t * (1 - alpha_bar_prev) / (1 - alpha_bar)
-                coeff_x0 = torch.sqrt(alpha_bar_prev) * beta_t / (1 - alpha_bar)
-                coeff_xt = torch.sqrt(alpha_t) * (1 - alpha_bar_prev) / (1 - alpha_bar)
-
-                mean_post = coeff_x0 * predicted_x0 + coeff_xt * yt
-                noise = torch.randn_like(yt)
-                yt = mean_post + torch.sqrt(var_post) * noise
+                compute_posterior(forward_process, t)
             else:
                 yt = predicted_x0
 
+        
+        
             return yt
+        
