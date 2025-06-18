@@ -20,7 +20,7 @@ class FFNN(nn.Module):
             device (torch.device): Device to run the model on
         """
         super(FFNN, self).__init__()
-
+        self.name = "ffnn"
         self.input_size = input_size
         self.num_hidden = num_hidden
         self.hidden_size = hidden_size
